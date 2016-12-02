@@ -216,10 +216,9 @@ uint8_t *root_dir_addr(uint8_t *image_buf, struct bpb33* bpb)
 }
 
 /* cluster_to_addr returns the memory location where the memory mapped
-   cluster actually starts */
+   cluster actually starts  --> address of cluster */
 
-uint8_t *cluster_to_addr(uint16_t cluster, uint8_t *image_buf, 
-			 struct bpb33* bpb)
+uint8_t *cluster_to_addr(uint16_t cluster, uint8_t *image_buf, struct bpb33* bpb)
 {
     uint8_t *p;
     p = root_dir_addr(image_buf, bpb);

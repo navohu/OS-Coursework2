@@ -19,7 +19,6 @@
 #include "dos.h"
 
 /* get_name retrieves the filename from a directory entry */
-
 void get_name(char *fullname, struct direntry *dirent) 
 {
     char name[9];
@@ -33,27 +32,27 @@ void get_name(char *fullname, struct direntry *dirent)
 
     /* names are space padded - remove the padding */
     for (i = 8; i > 0; i--) {
-	if (name[i] == ' ') 
-	    name[i] = '\0';
-	else 
-	    break;
+        if (name[i] == ' ') 
+            name[i] = '\0';
+        else 
+            break;
     }
 
     /* extensions aren't normally space padded - but remove the
        padding anyway if it's there */
     for (i = 3; i > 0; i--) {
-	if (extension[i] == ' ') 
-	    extension[i] = '\0';
-	else 
-	    break;
+        if (extension[i] == ' ') 
+            extension[i] = '\0';
+        else 
+            break;
     }
     fullname[0]='\0';
     strcat(fullname, name);
 
     /* append the extension if it's not a directory */
     if ((dirent->deAttributes & ATTR_DIRECTORY) == 0) {
-	strcat(fullname, ".");
-	strcat(fullname, extension);
+        strcat(fullname, ".");
+        strcat(fullname, extension);
     }
 }
 
@@ -65,9 +64,7 @@ void get_name(char *fullname, struct direntry *dirent)
 #define FIND_FILE 0
 #define FIND_DIR 1
 
-struct direntry* find_file(char *infilename, uint16_t cluster,
-			   int find_mode,
-			   uint8_t *image_buf, struct bpb33* bpb)
+struct direntry* find_file(char *infilename, uint16_t cluster, int find_mode, uint8_t *image_buf, struct bpb33* bpb)
 {
     char buf[MAXPATHLEN];
     char *seek_name, *next_name;
@@ -90,76 +87,73 @@ struct direntry* find_file(char *infilename, uint16_t cluster,
 
     /* trim leading slashes */
     while (*seek_name == '/' || *seek_name == '\\') {
-	seek_name++;
+        seek_name++;
     }
 
     /* search for any more slashes - if so, it's a dirname */
     next_name = seek_name;
     while (1) {
-	if (*next_name == '/' || *next_name == '\\') {
-	    *next_name = '\0';
-	    next_name ++;
-	    break;
-	}
-	if (*next_name == '\0') {
-	    /* end of name - no slashes found */
-	    next_name = NULL;
-	    if (find_mode == FIND_DIR) {
-		return dirent;
-	    }
-	    break;
-	}
-	next_name++;
+        if (*next_name == '/' || *next_name == '\\') {
+            *next_name = '\0';
+            next_name ++;
+            break;
+        }
+        if (*next_name == '\0') {
+            /* end of name - no slashes found */
+            next_name = NULL;
+            if (find_mode == FIND_DIR) {
+                return dirent;
+            }
+            break;
+        }
+        next_name++;
     }
 
     while (1) {
-	/* hunt a cluster for the relevant dirent.  If we reach the
-	   end of the cluster, we'll need to go to the next cluster
-	   for this directory */
-	for (d = 0; d < bpb->bpbBytesPerSec * bpb->bpbSecPerClust; 
-	     d += sizeof(struct direntry)) {
-	    if (dirent->deName[0] == SLOT_EMPTY) {
-		/* we failed to find the file */
-		return NULL;
-	    }
-	    if (dirent->deName[0] == SLOT_DELETED) {
-		/* skip over a deleted file */
-		dirent++;
-		continue;
-	    }
-	    get_name(fullname, dirent);
-	    if (strcmp(fullname, seek_name)==0) {
-		/* found it! */
-		if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {
-		    /* it's a directory */
-		    if (next_name == NULL) {
-			fprintf(stderr, "Cannot copy out a directory\n");
-			exit(1);
-		    }
-		    dir_cluster = getushort(dirent->deStartCluster);
-		    return find_file(next_name, dir_cluster, 
-				     find_mode, image_buf, bpb);
-		} else if ((dirent->deAttributes & ATTR_VOLUME) != 0) {
-		    /* it's a volume */
-		    fprintf(stderr, "Cannot copy out a volume\n");
-		    exit(1);
-		} else {
-		    /* assume it's a file */
-		    return dirent;
-		}
-	    }
-	    dirent++;
-	}
-	/* we've reached the end of the cluster for this directory.
-	   Where's the next cluster? */
-	if (cluster == 0) {
-	    // root dir is special
-	    dirent++;
-	} else {
-	    cluster = get_fat_entry(cluster, image_buf, bpb);
-	    dirent = (struct direntry*)cluster_to_addr(cluster, 
-						       image_buf, bpb);
-	}
+    /* hunt a cluster for the relevant dirent.  If we reach the
+       end of the cluster, we'll need to go to the next cluster
+       for this directory */
+        for (d = 0; d < bpb->bpbBytesPerSec * bpb->bpbSecPerClust; d += sizeof(struct direntry)) {
+            if (dirent->deName[0] == SLOT_EMPTY) {
+                /* we failed to find the file */
+                return NULL;
+            }
+            if (dirent->deName[0] == SLOT_DELETED) {
+                /* skip over a deleted file */
+                dirent++;
+                continue;
+            }
+            get_name(fullname, dirent);
+            if (strcmp(fullname, seek_name)==0) {
+                /* found it! */
+                if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {
+                    /* it's a directory */
+                    if (next_name == NULL) {
+                        fprintf(stderr, "Cannot copy out a directory\n");
+                        exit(1);
+                    }
+                    dir_cluster = getushort(dirent->deStartCluster);
+                    return find_file(next_name, dir_cluster,find_mode, image_buf, bpb);
+                } else if ((dirent->deAttributes & ATTR_VOLUME) != 0) {
+                    /* it's a volume */
+                    fprintf(stderr, "Cannot copy out a volume\n");
+                    exit(1);
+                } else {
+                    /* assume it's a file */
+                    return dirent;
+                }
+            }
+            dirent++;
+        }
+        /* we've reached the end of the cluster for this directory.
+           Where's the next cluster? */
+        if (cluster == 0) {
+            // root dir is special
+            dirent++;
+        } else {
+            cluster = get_fat_entry(cluster, image_buf, bpb);
+            dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
+        }
     }
 }
 
@@ -176,12 +170,12 @@ void copy_out_file(FILE *fd, uint16_t cluster, uint32_t bytes_remaining,
     clust_size = bpb->bpbSecPerClust * bpb->bpbBytesPerSec;
     total_clusters = bpb->bpbSectors / bpb->bpbSecPerClust;
     if (cluster == 0) {
-	fprintf(stderr, "Bad file termination\n");
-	return;
+        fprintf(stderr, "Bad file termination\n");
+        return;
     } else if (is_end_of_file(cluster)) {
-	return;	
+        return;	
     } else if (cluster > total_clusters) {
-	abort(); /* this shouldn't be able to happen */
+        abort(); /* this shouldn't be able to happen */
     }
 
     /* map the cluster number to the data location */

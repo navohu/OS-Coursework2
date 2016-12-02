@@ -60,7 +60,7 @@ struct direntry {
 #define	SLOT_EMPTY	0x00		/* slot has never been used */
 #define	SLOT_E5		0x05		/* the real value is 0xe5 */
 #define	SLOT_DELETED	0xe5		/* file in this slot deleted */
-	u_int8_t	deExtension[3];	/* extension, blank filled */
+	u_int8_t	deExtension[3];	/* file extension, blank filled */
 	u_int8_t	deAttributes;	/* file attributes */
 #define	ATTR_NORMAL	0x00		/* normal file */
 #define	ATTR_READONLY	0x01		/* file is readonly */
