@@ -16,6 +16,64 @@
 #include "fat.h"
 #include "dos.h"
 
+typedef struct node {
+    int val;
+    struct node * next;
+} node_t;
+
+void push(node_t * head, int val) {
+    node_t * current = head;
+    while (current->next != NULL) {
+        current = current->next;
+    }
+
+    /* now we can add a new variable */
+    current->next = malloc(sizeof(node_t));
+    current->next->val = val;
+    current->next->next = NULL;
+}
+
+void mark_references(uint16_t cluster, int *referenced, uint32_t bytes_remaining, uint8_t *image_buf, struct bpb33* bpb){
+    int clust_size = bpb->bpbSecPerClust * bpb->bpbBytesPerSec;
+    int total_clusters = bpb->bpbSectors / bpb->bpbSecPerClust;
+
+    referenced[cluster] = 1;
+    
+    if (cluster == 0) {
+        fprintf(stderr, "Bad file termination\n");
+        return;
+    } else if (cluster > total_clusters) {
+        abort(); /* this shouldn't happen */
+    }
+
+    uint16_t next_cluster = get_fat_entry(cluster, image_buf, bpb);
+
+    if (is_end_of_file(next_cluster)) {
+        return;
+    } else {
+        mark_references(get_fat_entry(cluster, image_buf, bpb), referenced, bytes_remaining - clust_size, image_buf, bpb);
+    }
+}
+
+void check_references(int *referenced, uint8_t *image_buf, struct bpb33* bpb){
+    int total_clusters = bpb->bpbSectors / bpb->bpbSecPerClust;
+    int shownPrefix = 0;
+    for (int i = 2; i <= total_clusters; ++i)
+    {
+        if (referenced[i] == 0 && get_fat_entry(i, image_buf, bpb) != CLUST_FREE){
+            if(!shownPrefix){
+                printf("Unreferenced: ");
+                shownPrefix = 1;
+            }
+            printf(" %i", i);
+        }
+        if (i == total_clusters - 1 && shownPrefix) {
+            printf("\n");
+        }
+    }
+}
+
+
 void print_indent(int indent)
 {
   int i;
@@ -23,9 +81,9 @@ void print_indent(int indent)
     printf(" ");
 }
 
-void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb)
+void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, int *referenced)
 {
-
+    referenced[cluster] = 1;
     struct direntry *dirent;
     int d, i;
     dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb); //returns the address to the cluster
@@ -73,56 +131,19 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
                 dirent++;
                 continue;
             }
-
             if ((dirent->deAttributes & ATTR_VOLUME) != 0) {            //If the dirent show volume
-                //printf("Volume: %s\n", name);
-            } else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {  //If current dirent is a directory
-                print_indent(indent);
-                printf("%d\n",getushort(dirent->deStartCluster));
+                //Nothing
+            }
+            else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {  //If current dirent is a directory
                 file_cluster = getushort(dirent->deStartCluster);
-                follow_dir(file_cluster, indent+2, image_buf, bpb);
-            } else {                                                    //If it is a file
+                follow_dir(file_cluster, indent+2, image_buf, bpb, referenced);
+            } else {                                             //If it is a file
                 size = getulong(dirent->deFileSize);
-                print_indent(indent);
-                //printf("%s.%s (%u bytes)\n", name, extension, size);
-                printf("%d\n",getushort(dirent->deStartCluster));
+                mark_references(getushort(dirent->deStartCluster), referenced, size, image_buf, bpb);
             }
             dirent++; //Go to next directory entry
         }
-        if (cluster == 0) {
-            // root dir is special
-            dirent++;
-        } else {
-            cluster = get_fat_entry(cluster, image_buf, bpb);
-            dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb);
-        }
     }
-}
-
-typedef struct node {
-    int val;
-    struct node * next;
-} node_t;
-
-void push(node_t * head, int val) {
-    node_t * current = head;
-    while (current->next != NULL) {
-        current = current->next;
-    }
-
-    /* now we can add a new variable */
-    current->next = malloc(sizeof(node_t));
-    current->next->val = val;
-    current->next->next = NULL;
-}
-
-void print_clusters(uint16_t startCluster, uint8_t *image_buf, struct bpb33* bpb){
-    uint16_t nextCluster = get_fat_entry(startCluster, image_buf, bpb);
-    printf("Cluster number: %hu\n", startCluster);
-    // if (!is_end_of_file(nextCluster))
-    // {
-    //     print_clusters(get_fat_entry(nextCluster, image_buf, bpb), image_buf, bpb);
-    // }
 }
 
 
@@ -144,7 +165,10 @@ int main(int argc, char** argv)
     image_buf = mmap_file(argv[1], &fd);
     bpb = check_bootsector(image_buf); // returns a bpb33 struct
 
-    follow_dir(0,0,image_buf,bpb);
+    int *referenced = calloc(sizeof(int), 4096);
+    follow_dir(0,0,image_buf,bpb, referenced);
+    check_references(referenced, image_buf, bpb);
+
     close(fd);
     exit(0);
 }
