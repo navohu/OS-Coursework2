@@ -73,6 +73,40 @@ void check_references(int *referenced, uint8_t *image_buf, struct bpb33* bpb){
     }
 }
 
+uint32_t get_file_length(uint16_t cluster, uint8_t *image_buf, struct bpb33* bpb)
+{
+    uint32_t length = 1;
+
+    cluster = get_fat_entry(cluster, image_buf, bpb);
+    while (!is_end_of_file(cluster)) {
+        cluster = get_fat_entry(cluster, image_buf, bpb);
+        length++;
+    }
+
+    return length;
+}
+
+void lost_files(int *referenced, uint8_t *image_buf, struct bpb33* bpb){
+    int total_clusters = bpb->bpbSectors / bpb->bpbSecPerClust;
+    int shownPrefix = 0;
+    uint16_t size = 0;
+    for (int i = 2; i <= total_clusters; ++i)
+    {
+        if (referenced[i] == 0 && get_fat_entry(i, image_buf, bpb) != CLUST_FREE){
+            if(!shownPrefix){
+                size = get_file_length(i, image_buf, bpb);
+                printf("Lost File: %i %i\n", i, size);
+                shownPrefix = 1;
+            }
+            else if(i + 1 != get_fat_entry(i, image_buf, bpb)){
+                shownPrefix = 0;
+                size = 0;
+            }
+
+        }
+    }
+}
+
 
 void print_indent(int indent)
 {
@@ -168,6 +202,7 @@ int main(int argc, char** argv)
     int *referenced = calloc(sizeof(int), 4096);
     follow_dir(0,0,image_buf,bpb, referenced);
     check_references(referenced, image_buf, bpb);
+    lost_files(referenced, image_buf, bpb);
 
     close(fd);
     exit(0);
