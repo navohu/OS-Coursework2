@@ -150,16 +150,21 @@ void create_direntry(int i, uint16_t size, int foundCount, uint8_t *image_buf, s
     const char base[] = "found";
     const char extension[] = ".dat";
     char filename [13];
-    sprintf(filename, "%s%i%s", base, foundCount++, extension);
+    printf("Created file: %s%i%s\n", base, foundCount, extension);
+    sprintf(filename, "%s%i%s", base, foundCount, extension);
 
     while(1){
         if(dirent->deName[0] == SLOT_EMPTY){ //found empty slot
             write_dirent(dirent, filename, i, size_bytes);
             dirent++;
+
+            memset((uint8_t*)dirent, 0, sizeof(struct direntry));
+            dirent->deName[0] = SLOT_EMPTY;
             return;
         }
         if(dirent->deName[0] == SLOT_DELETED){
             write_dirent(dirent, filename, i, size_bytes);
+            return;
         }
         dirent++;
     }
