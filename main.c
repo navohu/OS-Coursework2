@@ -16,12 +16,17 @@
 #include "fat.h"
 #include "dos.h"
 
+typedef struct tuple{
+    int startCluster;
+    int blockLength;
+} tTuple;
+
 typedef struct node {
-    int val;
+    struct tuple val;
     struct node * next;
 } node_t;
 
-void push(node_t * head, int val) {
+void push(node_t * head, struct tuple val) {
     node_t * current = head;
     while (current->next != NULL) {
         current = current->next;
@@ -86,33 +91,109 @@ uint32_t get_file_length(uint16_t cluster, uint8_t *image_buf, struct bpb33* bpb
     return length;
 }
 
+/* write the values into a directory entry -- from dos_cp.c*/
+void write_dirent(struct direntry *dirent, char *filename, uint16_t start_cluster, uint32_t size)
+{
+    char *p, *p2;
+    char *uppername;
+    int len, i;
+
+    /* clean out anything old that used to be here */
+    memset(dirent, 0, sizeof(struct direntry));
+
+    /* extract just the filename part */
+    uppername = strdup(filename);
+    p2 = uppername;
+    for (i = 0; i < strlen(filename); i++) {
+        if (p2[i] == '/' || p2[i] == '\\') {
+            uppername = p2+i+1;
+        }
+    }
+
+    /* convert filename to upper case */
+    for (i = 0; i < strlen(uppername); i++) {
+        uppername[i] = toupper(uppername[i]);
+    }
+
+    /* set the file name and extension */
+    memset(dirent->deName, ' ', 8);
+    p = strchr(uppername, '.');
+    memcpy(dirent->deExtension, "___", 3);
+    if (p == NULL) {
+        fprintf(stderr, "No filename extension given - defaulting to .___\n");
+    } else {
+        *p = '\0';
+        p++;
+        len = strlen(p);
+        if (len > 3) len = 3;
+        memcpy(dirent->deExtension, p, len);
+    }
+    if (strlen(uppername)>8) {
+        uppername[8]='\0';
+    }
+    memcpy(dirent->deName, uppername, strlen(uppername));
+    free(p2);
+
+    /* set the attributes and file size */
+    dirent->deAttributes = ATTR_NORMAL;
+    putushort(dirent->deStartCluster, start_cluster);
+    putulong(dirent->deFileSize, size);
+
+    /* a real filesystem would set the time and date here, but it's
+       not necessary for this coursework */
+}
+
+void create_direntry(int i, uint16_t size, int foundCount, uint8_t *image_buf, struct bpb33* bpb){
+    struct direntry *dirent = (struct direntry*) cluster_to_addr(0, image_buf, bpb);
+    int clust_size = bpb->bpbSecPerClust * bpb->bpbBytesPerSec;
+    uint32_t size_bytes = size * clust_size;
+    const char base[] = "found";
+    const char extension[] = ".dat";
+    char filename [13];
+    sprintf(filename, "%s%i%s", base, foundCount++, extension);
+
+    while(1){
+        if(dirent->deName[0] == SLOT_EMPTY){ //found empty slot
+            write_dirent(dirent, filename, i, size_bytes);
+            dirent++;
+            return;
+        }
+        if(dirent->deName[0] == SLOT_DELETED){
+            write_dirent(dirent, filename, i, size_bytes);
+        }
+        dirent++;
+    }
+}
+
+void print_list(node_t * head) {
+    node_t * current = head;
+
+    while (current != NULL) {
+        printf("%i %i\n", current->val.startCluster, current->val.blockLength);
+        current = current->next;
+    }
+}
+
 void lost_files(int *referenced, uint8_t *image_buf, struct bpb33* bpb){
     int total_clusters = bpb->bpbSectors / bpb->bpbSecPerClust;
     int shownPrefix = 0;
-    uint16_t size = 0;
+    int foundCount = 0;
     for (int i = 2; i <= total_clusters; ++i)
     {
         if (referenced[i] == 0 && get_fat_entry(i, image_buf, bpb) != CLUST_FREE){
             if(!shownPrefix){
-                size = get_file_length(i, image_buf, bpb);
+                uint16_t size = get_file_length(i, image_buf, bpb);
                 printf("Lost File: %i %i\n", i, size);
+                create_direntry(i, size, foundCount, image_buf, bpb);
                 shownPrefix = 1;
+                foundCount++;
             }
             else if(i + 1 != get_fat_entry(i, image_buf, bpb)){
                 shownPrefix = 0;
-                size = 0;
             }
-
         }
     }
-}
 
-
-void print_indent(int indent)
-{
-  int i;
-  for (i = 0; i < indent; i++)
-    printf(" ");
 }
 
 void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, int *referenced)
@@ -173,7 +254,9 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
                 follow_dir(file_cluster, indent+2, image_buf, bpb, referenced);
             } else {                                             //If it is a file
                 size = getulong(dirent->deFileSize);
-                mark_references(getushort(dirent->deStartCluster), referenced, size, image_buf, bpb);
+
+                /* MARKS THE REFERENCES, QUESTION 1*/
+                mark_references(getushort(dirent->deStartCluster), referenced, size, image_buf, bpb); 
             }
             dirent++; //Go to next directory entry
         }
@@ -183,7 +266,7 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
 
 void usage()
 {
-    fprintf(stderr, "Usage: dos_ls <imagename>\n");
+    fprintf(stderr, "Usage: ./dos_scandisk <imagename>\n");
     exit(1);
 }
 
