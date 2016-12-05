@@ -137,8 +137,7 @@ struct bpb33* check_bootsector(uint8_t *image_buf)
 
 /* get_fat_entry returns the value from the FAT entry for
    clusternum. */
-uint16_t get_fat_entry(uint16_t clusternum, 
-		       uint8_t *image_buf, struct bpb33* bpb)
+uint16_t get_fat_entry(uint16_t clusternum, uint8_t *image_buf, struct bpb33* bpb)
 {
     uint32_t offset;
     uint16_t value;
@@ -146,20 +145,19 @@ uint16_t get_fat_entry(uint16_t clusternum,
     
     /* this involves some really ugly bit shifting.  This probably
        only works on a little-endian machine. */
-    offset = bpb->bpbResSectors * bpb->bpbBytesPerSec * bpb->bpbSecPerClust 
-	+ (3 * (clusternum/2));
+    offset = bpb->bpbResSectors * bpb->bpbBytesPerSec * bpb->bpbSecPerClust + (3 * (clusternum/2));
     switch(clusternum % 2) {
-    case 0:
-	b1 = *(image_buf + offset);
-	b2 = *(image_buf + offset + 1);
-	/* mjh: little-endian CPUs are ugly! */
-	value = ((0x0f & b2) << 8) | b1;
-	break;
-    case 1:
-	b1 = *(image_buf + offset + 1);
-	b2 = *(image_buf + offset + 2);
-	value = b2 << 4 | ((0xf0 & b1) >> 4);
-	break;
+        case 0:
+            b1 = *(image_buf + offset);
+            b2 = *(image_buf + offset + 1);
+            /* mjh: little-endian CPUs are ugly! */
+            value = ((0x0f & b2) << 8) | b1;
+            break;
+        case 1:
+            b1 = *(image_buf + offset + 1);
+            b2 = *(image_buf + offset + 2);
+            value = b2 << 4 | ((0xf0 & b1) >> 4);
+            break;
     }
     return value;
 }

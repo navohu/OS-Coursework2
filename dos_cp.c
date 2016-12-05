@@ -258,9 +258,9 @@ uint16_t copy_in_file(FILE* fd, uint8_t *image_buf, struct bpb33* bpb,
 
 	    /* find a free cluster */
 	    for (i = 2; i < total_clusters; i++) {
-		if (get_fat_entry(i, image_buf, bpb) == CLUST_FREE) {
-		    break;
-		}
+            if (get_fat_entry(i, image_buf, bpb) == CLUST_FREE) {
+                break;
+            }
 	    }
 
 	    if (i == total_clusters) {
@@ -298,8 +298,7 @@ uint16_t copy_in_file(FILE* fd, uint8_t *image_buf, struct bpb33* bpb,
 }
 
 /* write the values into a directory entry */
-void write_dirent(struct direntry *dirent, char *filename, 
-		   uint16_t start_cluster, uint32_t size)
+void write_dirent(struct direntry *dirent, char *filename, uint16_t start_cluster, uint32_t size)
 {
     char *p, *p2;
     char *uppername;
@@ -312,14 +311,14 @@ void write_dirent(struct direntry *dirent, char *filename,
     uppername = strdup(filename);
     p2 = uppername;
     for (i = 0; i < strlen(filename); i++) {
-	if (p2[i] == '/' || p2[i] == '\\') {
-	    uppername = p2+i+1;
-	}
+        if (p2[i] == '/' || p2[i] == '\\') {
+            uppername = p2+i+1;
+        }
     }
 
     /* convert filename to upper case */
     for (i = 0; i < strlen(uppername); i++) {
-	uppername[i] = toupper(uppername[i]);
+        uppername[i] = toupper(uppername[i]);
     }
 
     /* set the file name and extension */
@@ -327,16 +326,16 @@ void write_dirent(struct direntry *dirent, char *filename,
     p = strchr(uppername, '.');
     memcpy(dirent->deExtension, "___", 3);
     if (p == NULL) {
-	fprintf(stderr, "No filename extension given - defaulting to .___\n");
+        fprintf(stderr, "No filename extension given - defaulting to .___\n");
     } else {
-	*p = '\0';
-	p++;
-	len = strlen(p);
-	if (len > 3) len = 3;
-	memcpy(dirent->deExtension, p, len);
+        *p = '\0';
+        p++;
+        len = strlen(p);
+        if (len > 3) len = 3;
+        memcpy(dirent->deExtension, p, len);
     }
     if (strlen(uppername)>8) {
-	uppername[8]='\0';
+        uppername[8]='\0';
     }
     memcpy(dirent->deName, uppername, strlen(uppername));
     free(p2);
@@ -354,36 +353,33 @@ void write_dirent(struct direntry *dirent, char *filename,
 /* create_dirent finds a free slot in the directory, and write the
    directory entry */
 
-void create_dirent(struct direntry *dirent, char *filename, 
-		   uint16_t start_cluster, uint32_t size,
-		   uint8_t *image_buf, struct bpb33* bpb)
+void create_dirent(struct direntry *dirent, char *filename, uint16_t start_cluster, uint32_t size, uint8_t *image_buf, struct bpb33* bpb)
 {
     while(1) {
-	if (dirent->deName[0] == SLOT_EMPTY) {
-	    /* we found an empty slot at the end of the directory */
-	    write_dirent(dirent, filename, start_cluster, size);
-	    dirent++;
+        if (dirent->deName[0] == SLOT_EMPTY) {
+            /* we found an empty slot at the end of the directory */
+            write_dirent(dirent, filename, start_cluster, size);
+            dirent++;
 
-	    /* make sure the next dirent is set to be empty, just in
-	       case it wasn't before */
-	    memset((uint8_t*)dirent, 0, sizeof(struct direntry));
-	    dirent->deName[0] = SLOT_EMPTY;
-	    return;
-	}
-	if (dirent->deName[0] == SLOT_DELETED) {
-	    /* we found a deleted entry - we can just overwrite it */
-	    write_dirent(dirent, filename, start_cluster, size);
-	    return;
-	}
-	dirent++;
+            /* make sure the next dirent is set to be empty, just in
+               case it wasn't before */
+            memset((uint8_t*)dirent, 0, sizeof(struct direntry));
+            dirent->deName[0] = SLOT_EMPTY;
+            return;
+        }
+        if (dirent->deName[0] == SLOT_DELETED) {
+            /* we found a deleted entry - we can just overwrite it */
+            write_dirent(dirent, filename, start_cluster, size);
+            return;
+        }
+        dirent++;
     }
 }
 
 /* copyin copies a file from a regular file on the filesystem into a
    file in the FAT-12 memory disk image  */
 
-void copyin(char *infilename, char* outfilename,
-	     uint8_t *image_buf, struct bpb33* bpb)
+void copyin(char *infilename, char* outfilename, uint8_t *image_buf, struct bpb33* bpb)
 {
     struct direntry *dirent = (void*)1;
     FILE *fd;
@@ -396,23 +392,23 @@ void copyin(char *infilename, char* outfilename,
     /* check that the file doesn't already exist */
     dirent = find_file(outfilename, 0, FIND_FILE, image_buf, bpb);
     if (dirent != NULL) {
-	fprintf(stderr, "File %s already exists\n", outfilename);
-	exit(1);
+        fprintf(stderr, "File %s already exists\n", outfilename);
+        exit(1);
     }
 
     /* find the dirent of the directory to put the file in */
     dirent = find_file(outfilename, 0, FIND_DIR, image_buf, bpb);
     if (dirent == NULL) {
-	fprintf(stderr, "Directory does not exists in the disk image\n");
-	exit(1);
+        fprintf(stderr, "Directory does not exists in the disk image\n");
+        exit(1);
     }
 
     /* open the real file for reading */
     fd = fopen(infilename, "r");
     if (fd == NULL) {
-	fprintf(stderr, "Can't open file %s to copy data in\n",
-		infilename);
-	exit(1);
+        fprintf(stderr, "Can't open file %s to copy data in\n",
+        infilename);
+        exit(1);
     }
 
     /* do the actual copy in*/
@@ -420,7 +416,7 @@ void copyin(char *infilename, char* outfilename,
 
     /* create the directory entry */
     create_dirent(dirent, outfilename, start_cluster, size, image_buf, bpb);
-    
+
     fclose(fd);
 }
 
@@ -440,7 +436,7 @@ int main(int argc, char** argv)
     uint8_t *image_buf;
     struct bpb33* bpb;
     if (argc < 4 || argc > 4) {
-	usage();
+        usage();
     }
 
     image_buf = mmap_file(argv[1], &fd);
@@ -448,13 +444,13 @@ int main(int argc, char** argv)
 
     /* use the "a:" bit to determine whether we're copying in or out */
     if (strncmp("a:", argv[2], 2)==0) {
-	/* copy from FAT-12 disk image to external filesystem */
-	copyout(argv[2], argv[3], image_buf, bpb);
+        /* copy from FAT-12 disk image to external filesystem */
+        copyout(argv[2], argv[3], image_buf, bpb);
     } else if (strncmp("a:", argv[3], 2)==0) {
-	/* copy from external filesystem to FAT-12 disk image */
-	copyin(argv[2], argv[3], image_buf, bpb);
+        /* copy from external filesystem to FAT-12 disk image */
+        copyin(argv[2], argv[3], image_buf, bpb);
     } else {
-	usage();
+        usage();
     }
     close(fd);
     exit(0);

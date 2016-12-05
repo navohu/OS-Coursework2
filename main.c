@@ -16,28 +16,6 @@
 #include "fat.h"
 #include "dos.h"
 
-typedef struct tuple{
-    int startCluster;
-    int blockLength;
-} tTuple;
-
-typedef struct node {
-    struct tuple val;
-    struct node * next;
-} node_t;
-
-void push(node_t * head, struct tuple val) {
-    node_t * current = head;
-    while (current->next != NULL) {
-        current = current->next;
-    }
-
-    /* now we can add a new variable */
-    current->next = malloc(sizeof(node_t));
-    current->next->val = val;
-    current->next->next = NULL;
-}
-
 void mark_references(uint16_t cluster, int *referenced, uint32_t bytes_remaining, uint8_t *image_buf, struct bpb33* bpb){
     int clust_size = bpb->bpbSecPerClust * bpb->bpbBytesPerSec;
     int total_clusters = bpb->bpbSectors / bpb->bpbSecPerClust;
@@ -150,7 +128,6 @@ void create_direntry(int i, uint16_t size, int foundCount, uint8_t *image_buf, s
     const char base[] = "found";
     const char extension[] = ".dat";
     char filename [13];
-    printf("Created file: %s%i%s\n", base, foundCount, extension);
     sprintf(filename, "%s%i%s", base, foundCount, extension);
 
     while(1){
@@ -170,38 +147,7 @@ void create_direntry(int i, uint16_t size, int foundCount, uint8_t *image_buf, s
     }
 }
 
-void print_list(node_t * head) {
-    node_t * current = head;
-
-    while (current != NULL) {
-        printf("%i %i\n", current->val.startCluster, current->val.blockLength);
-        current = current->next;
-    }
-}
-
-void lost_files(int *referenced, uint8_t *image_buf, struct bpb33* bpb){
-    int total_clusters = bpb->bpbSectors / bpb->bpbSecPerClust;
-    int shownPrefix = 0;
-    int foundCount = 0;
-    for (int i = 2; i <= total_clusters; ++i)
-    {
-        if (referenced[i] == 0 && get_fat_entry(i, image_buf, bpb) != CLUST_FREE){
-            if(!shownPrefix){
-                uint16_t size = get_file_length(i, image_buf, bpb);
-                printf("Lost File: %i %i\n", i, size);
-                create_direntry(i, size, foundCount, image_buf, bpb);
-                shownPrefix = 1;
-                foundCount++;
-            }
-            else if(i + 1 != get_fat_entry(i, image_buf, bpb)){
-                shownPrefix = 0;
-            }
-        }
-    }
-
-}
-
-void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* bpb, int *referenced)
+void follow_dir(uint16_t cluster, uint8_t *image_buf, struct bpb33* bpb, int *referenced)
 {
     referenced[cluster] = 1;
     struct direntry *dirent;
@@ -256,12 +202,127 @@ void follow_dir(uint16_t cluster, int indent, uint8_t *image_buf, struct bpb33* 
             }
             else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {  //If current dirent is a directory
                 file_cluster = getushort(dirent->deStartCluster);
-                follow_dir(file_cluster, indent+2, image_buf, bpb, referenced);
+                follow_dir(file_cluster, image_buf, bpb, referenced);
             } else {                                             //If it is a file
                 size = getulong(dirent->deFileSize);
 
                 /* MARKS THE REFERENCES, QUESTION 1*/
                 mark_references(getushort(dirent->deStartCluster), referenced, size, image_buf, bpb); 
+
+            }
+            dirent++; //Go to next directory entry
+        }
+    }
+}
+
+void lost_files(int *referenced, uint8_t *image_buf, struct bpb33* bpb){
+    int total_clusters = bpb->bpbSectors / bpb->bpbSecPerClust;
+    int shownPrefix = 0;
+    int foundCount = 0;
+    for (int i = 2; i <= total_clusters; ++i)
+    {
+        if (referenced[i] == 0 && get_fat_entry(i, image_buf, bpb) != CLUST_FREE){
+            if(!shownPrefix){
+                uint16_t size = get_file_length(i, image_buf, bpb);
+                printf("Lost File: %i %i\n", i, size);
+                create_direntry(i, size, foundCount, image_buf, bpb);
+                //follow_dir(0, image_buf, bpb, referenced);
+                shownPrefix = 1;
+                foundCount++;
+            }
+            else if(i + 1 != get_fat_entry(i, image_buf, bpb)){
+                shownPrefix = 0;
+            }
+        }
+    }
+
+}
+
+void free_clusters(uint16_t cluster_begin, uint16_t cluster_end, uint8_t *image_buf, struct bpb33* bpb) {
+    uint16_t current_cluster = cluster_begin;
+   
+    while(1) {
+        uint16_t next_cluster = get_fat_entry(current_cluster, image_buf, bpb);
+        set_fat_entry(current_cluster, FAT12_MASK&CLUST_FREE, image_buf, bpb);
+        if (current_cluster == cluster_end || is_end_of_file(next_cluster)) {
+            break;
+        }
+        current_cluster = next_cluster;
+    }
+    set_fat_entry(cluster_begin, FAT12_MASK&CLUST_EOFS, image_buf, bpb);
+}
+
+void check_file_length(uint16_t cluster, uint8_t *image_buf, struct bpb33* bpb)
+{
+    struct direntry *dirent;
+    int d, i;
+    dirent = (struct direntry*)cluster_to_addr(cluster, image_buf, bpb); //returns the address to the cluster
+    int clust_size = bpb->bpbBytesPerSec * bpb->bpbSecPerClust;
+    while (1) {
+        //for less than bytesPerSec*seconPerClust and increase with size of direntry at a time (32)
+        for (d = 0; d < bpb->bpbBytesPerSec * bpb->bpbSecPerClust; d += sizeof(struct direntry)) { 
+            //File information
+            char name[9]; 
+            char extension[4];
+            uint32_t size;
+            uint16_t file_cluster;
+            name[8] = ' ';
+            extension[3] = ' ';
+            memcpy(name, &(dirent->deName[0]), 8); //creates a max space of 8 characters in a file
+            memcpy(extension, dirent->deExtension, 3); //length 3 in extension
+            if (name[0] == SLOT_EMPTY)
+                return;
+
+            /* skip over deleted entries */
+            if (((uint8_t)name[0]) == SLOT_DELETED)
+            continue;
+
+            /* names are space padded - remove the spaces and add null character */
+            for (i = 8; i > 0; i--) {
+                if (name[i] == ' ') 
+                name[i] = '\0';
+            else 
+                break;
+            }
+
+            /* remove the spaces from extensions */
+            for (i = 3; i > 0; i--) {
+                if (extension[i] == ' ') 
+                extension[i] = '\0';
+            else 
+                break;
+            }
+
+            /* don't print "." or ".." directories */
+            if (strcmp(name, ".")==0) {
+                dirent++;
+                continue;
+            }
+            if (strcmp(name, "..")==0) {
+                dirent++;
+                continue;
+            }
+            if ((dirent->deAttributes & ATTR_VOLUME) != 0) {            //If the dirent show volume
+                //Nothing
+            }
+            else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {  //If current dirent is a directory
+                file_cluster = getushort(dirent->deStartCluster);
+                check_file_length(file_cluster, image_buf, bpb);
+            } else {                                             //If it is a file
+                size = getulong(dirent->deFileSize);
+                file_cluster = getushort(dirent->deStartCluster);
+                uint16_t fat_size_clusters = get_file_length(file_cluster, image_buf, bpb);
+                uint32_t size_clusters = (size + (clust_size)) / clust_size;
+                uint32_t fat_size = fat_size_clusters * clust_size;
+                
+                if (size_clusters != fat_size_clusters) {
+                    printf("%s.%s %u %u\n", name, extension, size, fat_size);
+
+                    uint16_t start_cluster = file_cluster + size_clusters - 1;
+                    uint16_t end_cluster = file_cluster + fat_size_clusters;
+                    free_clusters(start_cluster, end_cluster, image_buf, bpb);
+                }
+
             }
             dirent++; //Go to next directory entry
         }
@@ -288,9 +349,10 @@ int main(int argc, char** argv)
     bpb = check_bootsector(image_buf); // returns a bpb33 struct
 
     int *referenced = calloc(sizeof(int), 4096);
-    follow_dir(0,0,image_buf,bpb, referenced);
+    follow_dir(0,image_buf,bpb, referenced);
     check_references(referenced, image_buf, bpb);
     lost_files(referenced, image_buf, bpb);
+    check_file_length(0, image_buf, bpb);
 
     close(fd);
     exit(0);
