@@ -41,7 +41,8 @@ void mark_references(uint16_t cluster, int *referenced, uint32_t bytes_remaining
 void check_references(int *referenced, uint8_t *image_buf, struct bpb33* bpb){
     int total_clusters = bpb->bpbSectors / bpb->bpbSecPerClust;
     int shownPrefix = 0;
-    for (int i = 2; i <= total_clusters; ++i)
+    int i = 0;
+    for (i = 2; i <= total_clusters; ++i)
     {
         if (referenced[i] == 0 && get_fat_entry(i, image_buf, bpb) != CLUST_FREE){
             if(!shownPrefix){
@@ -206,16 +207,12 @@ typedef struct node {
 
 void push(int index, node_t **head, char *name, uint32_t size, uint32_t fat_size){
     node_t *newNode = malloc(sizeof(node_t));
-    // if(head[index]->name == NULL){
-    //     printf("I'm NULL");
-    // }
-    /* now we can add a new variable */
+
     newNode->name = name;
     newNode->size = size;
     newNode->fat_size = fat_size;
 
     head[index] = newNode;
-    printf("%s\n", head[index]->name);
 
 }
 
@@ -321,7 +318,8 @@ void lost_files(int *referenced, uint8_t *image_buf, struct bpb33* bpb){
     int total_clusters = bpb->bpbSectors / bpb->bpbSecPerClust;
     int shownPrefix = 0;
     int foundCount = 0;
-    for (int i = 2; i <= total_clusters; ++i)
+    int i = 0;
+    for (i = 2; i <= total_clusters; ++i)
     {
         if (referenced[i] == 0 && get_fat_entry(i, image_buf, bpb) != CLUST_FREE){
             if(!shownPrefix){
@@ -355,7 +353,7 @@ int main(int argc, char** argv)
     int *referenced = calloc(sizeof(int), 4096); //array of referenced files
 
     //Linked list consisting all the length inconsistencies
-    node_t **head = malloc(sizeof(node_t));
+    node_t **head = malloc(sizeof(node_t)*100);
 
     if (argc < 2 || argc > 2) {
         usage();
