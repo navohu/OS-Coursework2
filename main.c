@@ -16,6 +16,8 @@
 #include "fat.h"
 #include "dos.h"
 
+int overall_length = 0;
+
 void mark_references(uint16_t cluster, int *referenced, uint32_t bytes_remaining, uint8_t *image_buf, struct bpb33* bpb){
     int clust_size = bpb->bpbSecPerClust * bpb->bpbBytesPerSec;
     int total_clusters = bpb->bpbSectors / bpb->bpbSecPerClust;
@@ -207,24 +209,21 @@ typedef struct node {
 
 void push(int index, node_t **head, char *name, uint32_t size, uint32_t fat_size){
     node_t *newNode = malloc(sizeof(node_t));
-
     newNode->name = name;
     newNode->size = size;
     newNode->fat_size = fat_size;
-
     head[index] = newNode;
-
 }
 
 void print_inconsistent_files(node_t **head, uint8_t *image_buf, struct bpb33* bpb){
-    node_t **current = head;
-    int length = sizeof(head)/sizeof(head[0]);
-    
-    printf("%i\n", length);
     int i = 0;
-    for(i = 0; i < length; i++){
+    for(i = 0; i < overall_length; i++){
         printf("%s %u %u\n", head[i]->name, head[i]->size, head[i]->fat_size);
     }
+}
+
+void countLength(){
+    overall_length++;
 }
 
 void check_dir(node_t **head, int marker, int index, uint16_t cluster, uint8_t *image_buf, struct bpb33* bpb, int *referenced)
@@ -309,6 +308,7 @@ void check_dir(node_t **head, int marker, int index, uint16_t cluster, uint8_t *
                         push(index, head, newName, size, fat_size);
                         free_clusters(start_cluster, end_cluster, image_buf, bpb);
                         index++;
+                        countLength();
                     }
                 }
 
