@@ -206,9 +206,9 @@ typedef struct node {
 
 void push(int index, node_t **head, char *name, uint32_t size, uint32_t fat_size){
     node_t *newNode = malloc(sizeof(node_t));
-    if(head[index]->name == NULL){
-        printf("I'm NULL");
-    }
+    // if(head[index]->name == NULL){
+    //     printf("I'm NULL");
+    // }
     /* now we can add a new variable */
     newNode->name = name;
     newNode->size = size;
@@ -219,7 +219,7 @@ void push(int index, node_t **head, char *name, uint32_t size, uint32_t fat_size
 
 }
 
-void print_and_free_clusters(node_t **head, uint8_t *image_buf, struct bpb33* bpb){
+void print_inconsistent_files(node_t **head, uint8_t *image_buf, struct bpb33* bpb){
     int i = 0;
     for(i = 0; i < sizeof(head); i++){
         printf("%s %u %u\n", head[i]->name, head[i]->size, head[i]->fat_size);
@@ -369,7 +369,7 @@ int main(int argc, char** argv)
 
     lost_files(referenced, image_buf, bpb);       //Finds lost files and prints them
 
-    print_and_free_clusters(head, image_buf, bpb);
+    print_inconsistent_files(head, image_buf, bpb);
 
     close(fd);
     exit(0);
