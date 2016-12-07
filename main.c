@@ -202,44 +202,31 @@ typedef struct node {
     char *name;
     uint32_t size;
     uint32_t fat_size;
-    struct node *next;
-    uint16_t start_cluster;
-    uint16_t end_cluster;
 } node_t;
 
-void push(node_t *head, struct direntry *dirent, uint32_t size, uint32_t fat_size, uint16_t start_cluster, uint16_t end_cluster){
-    node_t * current = head;
-    if(current != NULL){
-        while (current->next != NULL) {
-            current = current->next;
-        }
-    } else {
-        current = malloc(sizeof(node_t));
-        
+void push(int index, node_t **head, char *name, uint32_t size, uint32_t fat_size){
+    node_t *newNode = malloc(sizeof(node_t));
+    if(head[index]->name == NULL){
+        printf("I'm NULL");
     }
-    char *name = malloc(sizeof(char) * 9);
-    get_name(name, dirent);
-
     /* now we can add a new variable */
-    current->name = name;
-    current->size = size;
-    current->fat_size = fat_size;
-    current->start_cluster = start_cluster;
-    current->end_cluster = end_cluster;
-    current->next = malloc(sizeof(node_t));
-    //printf("%s %u %u\n", current->name, current->size, current->fat_size);
+    newNode->name = name;
+    newNode->size = size;
+    newNode->fat_size = fat_size;
+
+    head[index] = newNode;
+    printf("%s\n", head[index]->name);
+
 }
 
-void print_and_free_clusters(node_t *head, uint8_t *image_buf, struct bpb33* bpb){
-    node_t *current = head;
-    while (current != NULL) {
-        printf("%s %u %u\n", current->name, current->size, current->fat_size);
-        free_clusters(current->start_cluster, current->end_cluster, image_buf, bpb);
-        current = current->next;
+void print_and_free_clusters(node_t **head, uint8_t *image_buf, struct bpb33* bpb){
+    int i = 0;
+    for(i = 0; i < sizeof(head); i++){
+        printf("%s %u %u\n", head[i]->name, head[i]->size, head[i]->fat_size);
     }
 }
 
-void check_dir(node_t *length_inconsistencies, int marker, uint16_t cluster, uint8_t *image_buf, struct bpb33* bpb, int *referenced)
+void check_dir(node_t **head, int marker, int index, uint16_t cluster, uint8_t *image_buf, struct bpb33* bpb, int *referenced)
 {
     referenced[cluster] = 1;
     struct direntry *dirent;
@@ -295,8 +282,8 @@ void check_dir(node_t *length_inconsistencies, int marker, uint16_t cluster, uin
             }
             else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {  //If current dirent is a directory
                 file_cluster = getushort(dirent->deStartCluster);
-                if(marker == 0) check_dir(length_inconsistencies, 0, file_cluster, image_buf, bpb, referenced);
-                if(marker == 1) check_dir(length_inconsistencies, 1, file_cluster, image_buf, bpb, referenced);
+                if(marker == 0) check_dir(NULL, 0, 0, file_cluster, image_buf, bpb, referenced);
+                if(marker == 1) check_dir(head, 1, index, file_cluster, image_buf, bpb, referenced);
             } else {                                             //If it is a file
                 /* MARKS REFERENCES SECTION */
                 if(marker == 0){
@@ -316,7 +303,11 @@ void check_dir(node_t *length_inconsistencies, int marker, uint16_t cluster, uin
                     uint16_t end_cluster = file_cluster + fat_size_clusters;
                     
                     if (size_clusters != fat_size_clusters) {
-                        push(length_inconsistencies, dirent, size, fat_size, start_cluster, end_cluster);
+                        char *newName = malloc(sizeof(char) * 100);
+                        get_name(newName, dirent);
+                        push(index, head, newName, size, fat_size);
+                        free_clusters(start_cluster, end_cluster, image_buf, bpb);
+                        index++;
                     }
                 }
 
@@ -364,22 +355,21 @@ int main(int argc, char** argv)
     int *referenced = calloc(sizeof(int), 4096); //array of referenced files
 
     //Linked list consisting all the length inconsistencies
-    node_t * length_inconsistencies = NULL;
-    // length_inconsistencies = malloc(sizeof(node_t));
+    node_t **head = malloc(sizeof(node_t));
 
     if (argc < 2 || argc > 2) {
         usage();
     }
 
-    check_dir(length_inconsistencies, 1, 0, image_buf, bpb, referenced);         //Checks for inconsistencies in length of file compared to FAT
+    check_dir(head, 1, 0, 0, image_buf, bpb, referenced);         //Checks for inconsistencies in length of file compared to FAT
     
-    check_dir(NULL, 0, 0,image_buf,bpb, referenced);      //Follows directories and marks the referenced array
+    check_dir(NULL, 0, 0, 0, image_buf,bpb, referenced);      //Follows directories and marks the referenced array
 
     check_references(referenced, image_buf, bpb); //Checks references and prints unreferenced files
 
     lost_files(referenced, image_buf, bpb);       //Finds lost files and prints them
-    printf("%s\n", length_inconsistencies->name);
-    print_and_free_clusters(length_inconsistencies, image_buf, bpb);
+
+    print_and_free_clusters(head, image_buf, bpb);
 
     close(fd);
     exit(0);
