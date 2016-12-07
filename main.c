@@ -217,8 +217,12 @@ void push(int index, node_t **head, char *name, uint32_t size, uint32_t fat_size
 }
 
 void print_inconsistent_files(node_t **head, uint8_t *image_buf, struct bpb33* bpb){
+    node_t **current = head;
+    int length = sizeof(head)/sizeof(head[0]);
+    
+    printf("%i\n", length);
     int i = 0;
-    for(i = 0; i < sizeof(head); i++){
+    for(i = 0; i < length; i++){
         printf("%s %u %u\n", head[i]->name, head[i]->size, head[i]->fat_size);
     }
 }
@@ -353,7 +357,7 @@ int main(int argc, char** argv)
     int *referenced = calloc(sizeof(int), 4096); //array of referenced files
 
     //Linked list consisting all the length inconsistencies
-    node_t **head = malloc(sizeof(node_t)*100);
+    node_t **head = malloc(sizeof(node_t));
 
     if (argc < 2 || argc > 2) {
         usage();
@@ -369,6 +373,7 @@ int main(int argc, char** argv)
 
     print_inconsistent_files(head, image_buf, bpb);
 
+    free(head);
     close(fd);
     exit(0);
 }
