@@ -222,11 +222,7 @@ void print_inconsistent_files(node_t **head, uint8_t *image_buf, struct bpb33* b
     }
 }
 
-void countLength(){
-    overall_length++;
-}
-
-void check_dir(node_t **head, int marker, int index, uint16_t cluster, uint8_t *image_buf, struct bpb33* bpb, int *referenced)
+void check_dir(node_t **head, int marker, uint16_t cluster, uint8_t *image_buf, struct bpb33* bpb, int *referenced)
 {
     referenced[cluster] = 1;
     struct direntry *dirent;
@@ -282,8 +278,8 @@ void check_dir(node_t **head, int marker, int index, uint16_t cluster, uint8_t *
             }
             else if ((dirent->deAttributes & ATTR_DIRECTORY) != 0) {  //If current dirent is a directory
                 file_cluster = getushort(dirent->deStartCluster);
-                if(marker == 0) check_dir(NULL, 0, 0, file_cluster, image_buf, bpb, referenced);
-                if(marker == 1) check_dir(head, 1, index, file_cluster, image_buf, bpb, referenced);
+                if(marker == 0) check_dir(NULL, 0, file_cluster, image_buf, bpb, referenced);
+                if(marker == 1) check_dir(head, 1, file_cluster, image_buf, bpb, referenced);
             } else {                                             //If it is a file
                 /* MARKS REFERENCES SECTION */
                 if(marker == 0){
@@ -305,10 +301,9 @@ void check_dir(node_t **head, int marker, int index, uint16_t cluster, uint8_t *
                     if (size_clusters != fat_size_clusters) {
                         char *newName = malloc(sizeof(char) * 100);
                         get_name(newName, dirent);
-                        push(index, head, newName, size, fat_size);
+                        push(overall_length, head, newName, size, fat_size);
                         free_clusters(start_cluster, end_cluster, image_buf, bpb);
-                        index++;
-                        countLength();
+                        overall_length++;
                     }
                 }
 
@@ -330,7 +325,6 @@ void lost_files(int *referenced, uint8_t *image_buf, struct bpb33* bpb){
                 uint16_t size = get_file_length(i, image_buf, bpb);
                 printf("Lost File: %i %i\n", i, size);
                 create_direntry(i, size, foundCount, image_buf, bpb);
-                //check_dir(0, image_buf, bpb, referenced);
                 shownPrefix = 1;
                 foundCount++;
             }
@@ -363,15 +357,15 @@ int main(int argc, char** argv)
         usage();
     }
 
-    check_dir(head, 1, 0, 0, image_buf, bpb, referenced);         //Checks for inconsistencies in length of file compared to FAT
+    check_dir(head, 1, 0, image_buf, bpb, referenced);     //Checks for inconsistencies in length of file compared to FAT
     
-    check_dir(NULL, 0, 0, 0, image_buf,bpb, referenced);      //Follows directories and marks the referenced array
+    check_dir(NULL, 0, 0, image_buf,bpb, referenced);      //Follows directories and marks the referenced array
 
-    check_references(referenced, image_buf, bpb); //Checks references and prints unreferenced files
+    check_references(referenced, image_buf, bpb);             //Checks references and prints unreferenced files
 
-    lost_files(referenced, image_buf, bpb);       //Finds lost files and prints them
+    lost_files(referenced, image_buf, bpb);                   //Finds lost files and prints them
 
-    print_inconsistent_files(head, image_buf, bpb);
+    print_inconsistent_files(head, image_buf, bpb);           //Prints the inconsistencies in the file
 
     free(head);
     close(fd);
